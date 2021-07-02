@@ -72,7 +72,7 @@ def l2_norm(x):
 
 
 
-def MIAT3_loss(model,
+def MIMAEAT_loss(model,
               x_natural,
               y,
               optimizer,
