@@ -174,6 +174,41 @@ def cwloss(output, target, confidence=50,num_classes=10):
         loss = torch.sum(loss)
         return loss
 
+def l2_attack(model, X, y, epsilon= 0.5, perturb_steps = 20):
+        delta = 0.001 * torch.randn(X.shape).cuda().detach()
+        delta = Variable(delta.data, requires_grad=True)
+        out = model(X)
+        err = (out.data.max(1)[1] != y.data).float().sum()
+        batch_size = len(X)
+        # Setup optimizers
+        optimizer_delta = optim.SGD([delta], lr=epsilon / perturb_steps * 2)
+
+        for _ in range(perturb_steps):
+            adv = X + delta
+
+            # optimize
+            optimizer_delta.zero_grad()
+            with torch.enable_grad():
+                loss =  (-1)* nn.CrossEntropyLoss()(model(adv), y)
+
+            loss.backward()
+            # renorming gradient
+            grad_norms = delta.grad.view(batch_size, -1).norm(p=2, dim=1)
+            delta.grad.div_(grad_norms.view(-1, 1, 1, 1))
+                        # avoid nan or inf if gradient is 0
+            if (grad_norms == 0).any():
+                delta.grad[grad_norms == 0] = torch.randn_like(delta.grad[grad_norms == 0])
+            optimizer_delta.step()
+
+            # projection
+            delta.data.add_(X)
+            delta.data.clamp_(0, 1).sub_(X)
+            delta.data.renorm_(p=2, dim=0, maxnorm=epsilon)
+        x_adv = Variable(X + delta, requires_grad=False)
+        x_adv = torch.clamp(x_adv, 0.0, 1.0)
+        err_pgd = (model(x_adv).data.max(1)[1] != y.data).float().sum()
+        return err, err_pgd
+
 
 
 
